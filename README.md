@@ -57,7 +57,7 @@ pnpm --filter @reputed/web dev       # http://localhost:3000
 
 Pages: `/` (home), `/explore`, `/agent/<id>`, `/creator/<address>`, `/verify` and `/dashboard` (`/onboard` redirects there). The signing flows (Verify, the API key dashboard, the review modal and report-compromised) are built but have not been run in a browser against a real World ID app; see the [Completion Plan](docs/07-completion-plan.md).
 
-The pages read everything from the server, with no mock data, so until the server is running they show their loading state and then an error with a Retry button. Connecting a wallet needs a browser wallet such as MetaMask; the app asks it to switch to Hedera Testnet.
+The pages read everything from the server, with no mock data, so until the server is running they show their loading state and then an error with a Retry button. Connecting a wallet needs HashPack (the browser extension, or the mobile app over WalletConnect when `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` is set) with an ECDSA account; the app asks it to switch to Hedera Testnet.
 
 Only public values go in `apps/web/.env.local`: `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_WORLD_APP_ID` and `NEXT_PUBLIC_WORLD_ACTION`. The footer also links `NEXT_PUBLIC_CREATOR_REGISTRY`, `NEXT_PUBLIC_CREDENTIAL_TOKEN_ID`, `NEXT_PUBLIC_SCORES_TOPIC_ID` and `NEXT_PUBLIC_GITHUB_URL` when they are set.
 

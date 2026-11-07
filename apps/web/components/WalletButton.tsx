@@ -38,7 +38,7 @@ function useConnectFlow() {
 
   const start = () => {
     if (choices.length === 0) {
-      toast('error', 'No wallet found. Install HashPack, MetaMask or another EVM wallet.');
+      toast('error', 'HashPack not found. Install the HashPack extension, then reload.');
     } else if (choices.length === 1) {
       connectWith(choices[0]!);
     } else {

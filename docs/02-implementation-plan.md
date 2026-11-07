@@ -51,7 +51,7 @@ Goal: every team member can read and write the ERC-8004 registries on Hedera tes
 
 **Tasks**
 
-1. Create testnet accounts in the Hedera Developer Portal and fund them from the faucet. Use ECDSA (secp256k1) keys so the same accounts work in MetaMask:
+1. Create testnet accounts in the Hedera Developer Portal and fund them from the faucet. Use ECDSA (secp256k1) keys so the same accounts work as EVM accounts in HashPack:
    - Operator (deployer, also holds the verifier role on testnet)
    - Creator A, Creator B, Creator C
    - Agent A1, Agent A2, Agent B1, Agent C1
@@ -181,7 +181,7 @@ Goal: a verified creator registers an agent in ERC-8004 and links it to their cr
 3. **Register.** The creator wallet calls `register(agentURI)` on the Identity Registry. Read the new `agentId` from the ERC-721 `Transfer` event (minted from `0x0`).
 4. **Record the registration.** Add `{agentId, agentRegistry: "eip155:296:0x8004A818BFB912233c491871b3d84c89A494BD9e"}` to `registrations`. Get a new URI from `POST /api/agent-file` and call `setAgentURI`. This step is optional for the MVP.
 5. **Set the agent wallet** (only if the agent has its own account). Call `setAgentWallet(agentId, wallet, deadline, signature)` with an EIP-712 signature from the agent's wallet. Otherwise the agent wallet stays the creator's address. If the wallet changes after step 7, the creator must then call `syncAgentWallet(agentId)` with a 1,500,000 gas limit. Until then the new wallet is not human-backed and has no credential. The old wallet stops counting at once, but keeps its frozen NFT until the issuer revokes it.
-6. **Associate, only if needed.** A wallet with a free auto-association slot needs nothing here, because the credential transfer associates it. Faucet-funded and hollow accounts have unlimited auto-association. A wallet with no free slots must associate first: either `associate()` on the token's EVM address (works from MetaMask) or `TokenAssociateTransaction`. This costs about $0.05.
+6. **Associate, only if needed.** A wallet with a free auto-association slot needs nothing here, because the credential transfer associates it. Faucet-funded and hollow accounts have unlimited auto-association. A wallet with no free slots must associate first: either `associate()` on the token's EVM address (works from any EVM wallet, HashPack included) or `TokenAssociateTransaction`. This costs about $0.05.
 7. **Link.** The creator calls `linkAgent(agentId)` on CreatorRegistry. The contract checks ownership, stores the link, and issues the Human-backed credential. The sender must set a 1,500,000 gas limit.
 8. **Optional for the MVP.** Derive the agent's HCS-14 UAID (Module 9 Lab 5) and publish an HCS-11 profile so HCS-10 tools can find it.
 
@@ -317,7 +317,7 @@ Goal: a creator can go from wallet connection to a live, public agent page in on
 
 **Stack**
 
-- Next.js with wagmi + viem, using a custom Hedera testnet chain (ID 296, Hashio RPC) for MetaMask. HashPack via WalletConnect comes later.
+- Next.js with wagmi + viem, using a custom Hedera testnet chain (ID 296, Hashio RPC) for HashPack, the only supported wallet (extension via EIP-6963, mobile via WalletConnect).
 - The World ID IDKit React widget (IDKit 4.x, which needs `rp_context` from the server)
 - Mirror Node REST for on-chain reads; the backend API for scores and search
 
@@ -344,7 +344,7 @@ Goal: a creator can go from wallet connection to a live, public agent page in on
 
 **Manual tests** (fresh browser profile each time)
 
-- [ ] T6.1 Connect MetaMask on the wrong network. A "Switch to Hedera Testnet" banner appears, and its button switches networks.
+- [ ] T6.1 Connect HashPack on the wrong network (it starts on mainnet, 295). A "Switch to Hedera Testnet" banner appears, and its button switches networks.
 - [ ] T6.2 Verify end to end as a new creator. The "Verified creator" badge appears within about 10 seconds, without a page refresh.
 - [ ] T6.3 Visit /onboard as wallet U. The page sends the user to Verify first.
 - [ ] T6.4 Onboard an agent end to end. The success screen shows the agent ID, HashScan links and the credential.

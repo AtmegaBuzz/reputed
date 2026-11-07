@@ -12,18 +12,22 @@ interface Props {
 }
 
 const HINTS: Record<string, string> = {
-  walletConnect: 'HashPack and mobile wallets, by QR code',
+  walletConnect: 'HashPack mobile, by QR code',
 };
 
-/** Extension wallets announce themselves, so the generic entry only matters when none did. */
+/** HashPack's extension announces itself over EIP-6963 under its own name and rdns. */
+function isHashPack(connector: Connector): boolean {
+  return /hashpack/i.test(connector.name) || /hashpack/i.test(connector.rdns?.toString() ?? '');
+}
+
+/** HashPack only: its extension when installed, and WalletConnect for the mobile app. */
 export function walletChoices(connectors: readonly Connector[]): Connector[] {
   const unique = connectors.filter((c, i) => connectors.findIndex((o) => o.id === c.id) === i);
-  const announced = unique.some((c) => c.type === 'injected' && c.id !== 'injected');
-  return announced ? unique.filter((c) => c.id !== 'injected') : unique;
+  return unique.filter((c) => c.id === 'walletConnect' || (c.type === 'injected' && isHashPack(c)));
 }
 
 function label(connector: Connector): string {
-  return connector.id === 'injected' ? 'Browser wallet' : connector.name;
+  return connector.id === 'walletConnect' ? 'HashPack (WalletConnect)' : connector.name;
 }
 
 export function WalletPicker({ open, connectors, onPick, onClose }: Props) {
@@ -31,7 +35,7 @@ export function WalletPicker({ open, connectors, onPick, onClose }: Props) {
   return (
     <Dialog open={open} onClose={onClose} labelledBy={titleId} className="wallet-picker">
       <div className="dialog-head">
-        <h2 id={titleId}>Connect a wallet</h2>
+        <h2 id={titleId}>Connect HashPack</h2>
         <button type="button" className="btn btn-outline btn-small" onClick={onClose}>
           Close
         </button>

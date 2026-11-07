@@ -58,7 +58,7 @@ export type PaymentProof =
   | { kind: 'eth-hash'; key: string };
 
 /**
- * MetaMask payers only ever see the EVM hash, so it is accepted alongside the Hedera ID.
+ * Payers sending from an EVM wallet only ever see the EVM hash, so it is accepted alongside the Hedera ID.
  * The key is the lookup key; reuse is checked on the resolved transaction ID, not on this.
  */
 export function parsePaymentProof(raw: unknown): PaymentProof | null {

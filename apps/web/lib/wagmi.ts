@@ -1,5 +1,5 @@
 import { createConfig, http, type CreateConnectorFn } from 'wagmi';
-import { injected, walletConnect } from 'wagmi/connectors';
+import { walletConnect } from 'wagmi/connectors';
 import { defineChain } from 'viem';
 import { HEDERA_TESTNET } from '@reputed/shared';
 
@@ -16,10 +16,13 @@ export const hederaTestnet = defineChain({
 /** Public value from cloud.reown.com. Without it the app offers browser-extension wallets only. */
 const walletConnectProjectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
 
-const connectors: CreateConnectorFn[] = [injected()];
+// HashPack is the only wallet Reputed supports. Its browser extension is found through EIP-6963
+// (multiInjectedProviderDiscovery below) and its mobile app pairs over WalletConnect. There is no
+// generic window.ethereum connector, so other extension wallets are never picked up by accident.
+const connectors: CreateConnectorFn[] = [];
 if (walletConnectProjectId) {
   // HashPack pairs over WalletConnect's EVM namespace, so every signature stays EIP-191/EIP-712
-  // and the server checks it the same way as MetaMask's.
+  // and the server checks it the same way as the extension's.
   connectors.push(
     walletConnect({
       projectId: walletConnectProjectId,
@@ -37,7 +40,7 @@ if (walletConnectProjectId) {
 export const wagmiConfig = createConfig({
   chains: [hederaTestnet],
   connectors,
-  // Lists every extension wallet that announces itself (EIP-6963), HashPack's included.
+  // Finds extension wallets that announce themselves (EIP-6963). The picker keeps HashPack's only.
   multiInjectedProviderDiscovery: true,
   transports: { [hederaTestnet.id]: http(HEDERA_TESTNET.rpcUrl) },
   // The server render never sees a wallet; wagmi restores the connection after hydration.

@@ -1,7 +1,19 @@
-import { BaseError, ChainMismatchError, InsufficientFundsError, UnauthorizedProviderError, UserRejectedRequestError } from 'viem';
+import {
+  BaseError,
+  ChainMismatchError,
+  InsufficientFundsError,
+  MethodNotFoundRpcError,
+  MethodNotSupportedRpcError,
+  UnauthorizedProviderError,
+  UserRejectedRequestError,
+} from 'viem';
 import { ConnectorAccountNotFoundError, ConnectorChainMismatchError } from 'wagmi';
 
 const TOP_UP = 'Not enough HBAR. Top up from the testnet faucet.';
+const WRONG_CHAIN = 'Your wallet is on another network. Switch it to Hedera Testnet, then retry.';
+const UNSUPPORTED = 'Your wallet refused this request as unsupported, so nothing was sent. Try another wallet, or check the browser console for details.';
+// A wallet that does not implement the send method refuses it before signing anything.
+const UNSUPPORTED_TEXT = /unsupported method|method not (found|supported)/i;
 const ACCOUNT_GONE = 'Your wallet no longer shares this account with this site. Switch back to it, then try again.';
 
 /**
@@ -35,18 +47,22 @@ export function describeWalletError(err: unknown): WalletErrorText {
   if (err instanceof ConnectorAccountNotFoundError || (err instanceof Error && err.name === 'ConnectorNotConnectedError')) {
     return { rejected: false, message: ACCOUNT_GONE, notSent: true };
   }
-  if (err instanceof ConnectorChainMismatchError) return { rejected: false, message: err.shortMessage, notSent: true };
+  if (err instanceof ConnectorChainMismatchError) return { rejected: false, message: WRONG_CHAIN, notSent: true };
   if (err instanceof BaseError) {
     if (err.walk((e) => e instanceof UserRejectedRequestError)) return { rejected: true, message: '', notSent: true };
     if (err.walk((e) => e instanceof InsufficientFundsError)) return { rejected: false, message: TOP_UP, notSent: true };
     // The relay words a low balance in Hedera's terms, which viem does not classify.
     if (/insufficient (funds|balance|payer|account)/i.test(err.message)) return { rejected: false, message: TOP_UP, notSent: true };
     if (err.walk((e) => e instanceof UnauthorizedProviderError)) return { rejected: false, message: ACCOUNT_GONE, notSent: true };
-    if (err.walk((e) => e instanceof ChainMismatchError)) return { rejected: false, message: err.shortMessage, notSent: true };
+    if (err.walk((e) => e instanceof ChainMismatchError)) return { rejected: false, message: WRONG_CHAIN, notSent: true };
+    if (err.walk((e) => e instanceof MethodNotSupportedRpcError || e instanceof MethodNotFoundRpcError) || UNSUPPORTED_TEXT.test(err.message)) {
+      return { rejected: false, message: UNSUPPORTED, notSent: true };
+    }
     // Anything else may have come back after the relay accepted the send, so the outcome is open.
     return { rejected: false, message: err.shortMessage, notSent: false };
   }
   const message = err instanceof Error ? (err.message.split('\n')[0] ?? 'Something went wrong.') : 'Something went wrong.';
+  if (UNSUPPORTED_TEXT.test(message)) return { rejected: false, message: UNSUPPORTED, notSent: true };
   const rejected = /user (rejected|denied)/i.test(message);
   return { rejected, message, notSent: rejected };
 }

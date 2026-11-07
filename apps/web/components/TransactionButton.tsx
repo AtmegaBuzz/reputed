@@ -1,11 +1,11 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useAccount } from 'wagmi';
+import { useAccount, useSwitchChain } from 'wagmi';
 import type { Hash } from 'viem';
 import { HEDERA_TESTNET, hashscan } from '@reputed/shared';
 import { RECONCILE_WINDOW_MS, SLOW_AFTER_MS, confirmTx, lookForSend, type ConfirmedTx, type TxFailure } from '@/lib/confirmTx';
-import { describeWalletError } from '@/lib/walletError';
+import { NotSentError, describeWalletError } from '@/lib/walletError';
 import { useToast } from './Toasts';
 
 // One button for every on-chain write. It owns the lifecycle after the click: the wallet signature,
@@ -109,7 +109,8 @@ export function TransactionButton<Found>({
   resumeStartedAt,
   disabled = false,
 }: Props<Found>) {
-  const { isConnected, chainId } = useAccount();
+  const { isConnected, chainId, connector } = useAccount();
+  const { switchChainAsync } = useSwitchChain();
   const { toast } = useToast();
   const [state, setState] = useState<TxState>(() => startingState(resumeHash, resumeStartedAt));
   // Bumped by Refresh to look again at once.
@@ -189,12 +190,29 @@ export function TransactionButton<Found>({
   const locked = state.step === 'signing' || state.step === 'confirming' || state.step === 'confirmed' || state.step === 'found' || phase === 'unknown';
   const blocked = disabled || !isConnected || onWrongNetwork || locked;
 
+  /**
+   * Asks the wallet which chain it is on right now and switches it to Hedera testnet if needed.
+   * wagmi's `chainId` can be stale (a wallet that changed network without telling the page), and
+   * viem would then refuse the send with a chain mismatch. Nothing has been sent if this throws.
+   */
+  async function ensureTestnet() {
+    try {
+      const actual = await connector?.getChainId();
+      if (actual !== undefined && actual !== HEDERA_TESTNET.id) await switchChainAsync({ chainId: HEDERA_TESTNET.id });
+    } catch (err) {
+      throw new NotSentError(err);
+    }
+  }
+
   async function run() {
     setState({ step: 'signing' });
     let hash: Hash;
     try {
+      await ensureTestnet();
       hash = await onSend();
     } catch (err) {
+      // The full error, with viem's cause chain, for debugging a wallet that words things its own way.
+      console.error('[tx] send failed', err);
       const { rejected, message, notSent } = describeWalletError(err);
       if (rejected) {
         setState({ step: 'rejected' });

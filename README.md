@@ -36,6 +36,7 @@ A pnpm workspace run by Turborepo (`pnpm build`, `pnpm typecheck`, `pnpm test`).
 | `packages/sdk` | Read client, counterparty gate and MCP server |
 | `packages/agent-kit` | `@reputed/agent-kit`: wrap a Hedera Agent Kit agent with one API key and it onboards itself ([README](packages/agent-kit/README.md)) |
 | `examples/agent-kit-langchain` | A LangChain agent using it |
+| `examples/agent-to-agent` | Two agents, backed by two humans, that hire, pay and rate each other, moving their own and their creators' scores ([README](examples/agent-to-agent/README.md)) |
 
 ## Run it
 

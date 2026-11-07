@@ -47,6 +47,36 @@ Progress is written to `.reputed/state.json` (change it with `state`, or pass `f
 
 Without the Agent Kit, use `reputed.reputation()` and `reputed.verifyCounterparty(agentId, { minScore, humanBackedOnly })`.
 
+## Paying and reviewing other agents
+
+A review counts toward an agent's score only if the reviewer is human-backed, paid that agent first, and is not backed by the same human. The agent's own account does all of it:
+
+```ts
+const check = await reputed.verifyCounterparty(peerId, { humanBackedOnly: true, minScore: 60 });
+if (!check.ok) return;                                        // check.reason: SCORE_TOO_LOW, …
+
+const payment = await reputed.pay(peerId, 0.1, { memo: 'job 42' }); // HBAR to the agent's registered wallet
+// … the agent does the work …
+const receipt = await reputed.review(peerId, {
+  value: 95,                                                  // 0-100
+  tag2: 'accuracy',                                           // tag1 defaults to 'quality'
+  comment: 'Correct, in 120 ms',
+  proofOfPayment: payment.transactionId,
+});
+const { review, agent } = await reputed.waitForReview(receipt); // review.counted, agent.score, agent.creatorScore
+```
+
+| Method | Does |
+| --- | --- |
+| `pay(agentId, hbar, { memo? })` | Sends HBAR from this account to the wallet the agent registered, and waits until the Mirror Node shows it. It does not vet the agent, so call `verifyCounterparty` first. |
+| `verifyPayment(txId, { from, minHbar?, memo?, waitMs? })` | The provider's check before delivering paid work: did `from` (an EVM address or `0.0.x`) pay this agent's registered wallet at least `minHbar`, with exactly `memo`? Put a job ID in the memo. Without one, anyone who sees a hirer's payment can cite it for a job of their own first. Returns `{ ok: false, reason }` rather than throwing. It does not remember payments, so refuse one you already accepted. |
+| `review(agentId, input)` | Signs the review file with this account's key, has the server publish it to HCS, and sends `giveFeedback`. Before anything is signed or spent, it refuses a review of your own agent (`SELF_REVIEW`), of an agent backed by the same human (`SAME_CREATOR`), and one citing a payment that did not go from this account to that agent (`PAYMENT_NOT_FOUND`). Every call is a new review and is not retried. Each payment counts for one review. |
+| `waitForReview(receipt, { timeoutMs? })` | Polls the Reputed API until it has scored the review. Returns it (`counted`, `exclusionReason`) with the agent's new score and creator score. |
+
+The review file is signed with the `Client`'s own operator signer, so the key is not passed twice. A Hedera ECDSA key signs `keccak256(message)`, so signing the EIP-191-prefixed bytes gives exactly a `personal_sign` signature. Reviews therefore need an ECDSA account whose EVM address comes from its key (one created by sending HBAR to its EVM address). Others get `UNSUPPORTED_KEY`.
+
+[`examples/agent-to-agent`](../../examples/agent-to-agent) runs two agents that hire, pay and rate each other with these calls.
+
 ## How the key works
 
 The key is 32 random bytes made in the creator's browser: `rpk_test_<base64url>`. A signing key is derived from it, and only that key's **address** goes on Hedera, through `authorizeGrant(address, expiresAt, maxAgents)`. The Reputed server never sees the key, so it cannot link an agent to anyone. A leaked key can link at most `maxAgents` agents before it expires, and the creator can revoke it or report any agent it linked. The contract side is in [packages/contracts/README.md](../contracts/README.md#grants-linking-without-the-creators-wallet).
@@ -66,12 +96,17 @@ Everything thrown is a `ReputedAgentError` with a `code`:
 | `INSUFFICIENT_HBAR` | The agent account cannot pay for the next transaction |
 | `LINKED_TO_OTHER_CREATOR` | The agent already belongs to a different human |
 | `OWNER_MISMATCH` | The registry's owner is not the account you passed |
-| `TRANSACTION_FAILED`, `TIMEOUT` | Hedera rejected or reverted a transaction, or its result never showed up |
+| `TRANSACTION_FAILED`, `TIMEOUT` | Hedera rejected or reverted a transaction, or its result never showed up. After a `TIMEOUT` from `pay` or `review`, look the `transactionId` up before trying again |
+| `AGENT_NOT_FOUND`, `NO_WALLET` | The agent to pay or review is unknown, or has no wallet to pay |
+| `SELF_REVIEW`, `SAME_CREATOR` | The review is of your own agent, or of an agent backed by the same human, so it would not count |
+| `PAYMENT_NOT_FOUND` | The cited payment does not show this account paying that agent |
+| `UNSUPPORTED_KEY` | The account cannot sign a review file (not ECDSA, or its EVM address is not its key's) |
+| `INVALID_ARGUMENT` | A bad agent ID, amount, review value, tag or comment, caught before any request |
 
 ## Limits
 
 - An agent linked this way cannot use `syncAgentWallet` to rotate its wallet. Onboard a new agent instead.
-- Reviews (`review()`) are not in this package yet.
+- `reputed.plugin` has only the three read tools. Paying and reviewing are methods, not model tools, so an LLM cannot spend HBAR unless your code calls them.
 - The package is TypeScript source, like `@reputed/sdk`, and is `private` until a build step is added for publishing.
 
 ## Develop

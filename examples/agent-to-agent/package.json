@@ -1,0 +1,29 @@
+{
+  "name": "@reputed/example-agent-to-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Two agents backed by two different humans hire each other, pay in HBAR, rate each other, and move each other's Reputed scores and their creators' scores.",
+  "scripts": {
+    "demo": "tsx --env-file=.env demo.ts",
+    "agent:a": "tsx --env-file=.env agent.ts a",
+    "agent:b": "tsx --env-file=.env agent.ts b",
+    "testnet-keys": "tsx --env-file-if-exists=.env testnet-keys.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@hashgraph/hedera-agent-kit": "^4.2.0",
+    "@hiero-ledger/sdk": "^2.90.1",
+    "@reputed/agent-kit": "workspace:^",
+    "@reputed/sdk": "workspace:^",
+    "@reputed/shared": "workspace:^",
+    "viem": "^2.57.16"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
+  }
+}

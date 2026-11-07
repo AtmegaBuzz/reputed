@@ -23,6 +23,18 @@ export interface ContractResult {
   logs: { address: string; topics: string[]; data: string }[];
 }
 
+/** One entry of GET /transactions/{id}. A scheduled transaction can return a parent and its children. */
+export interface MirrorTransaction {
+  transaction_id: string;
+  /** `SUCCESS`, `INSUFFICIENT_PAYER_BALANCE`, … */
+  result: string;
+  consensus_timestamp: string;
+  /** The transaction memo, base64. */
+  memo_base64?: string;
+  /** HBAR movements in tinybar, fees included: negative for the payer, positive for the payee. */
+  transfers?: { account: string; amount: number }[];
+}
+
 export interface RegisteredLog extends TxLog {
   transaction_hash?: string;
 }
@@ -120,6 +132,13 @@ export class MirrorClient {
   /** The result of a contract transaction, or null while the Mirror Node has not seen it yet. */
   getContractResult(transactionId: string): Promise<ContractResult | null> {
     return this.#get<ContractResult>(`/contracts/results/${transactionId}`);
+  }
+
+  /** Every entry recorded under a transaction ID (Mirror form, 0.0.x-seconds-nanos), or null while it is not indexed. */
+  async getTransaction(transactionId: string): Promise<MirrorTransaction[] | null> {
+    const body = await this.#get<{ transactions?: MirrorTransaction[] }>(`/transactions/${transactionId}`);
+    if (!body) return null;
+    return body.transactions?.length ? body.transactions : null;
   }
 
   /**

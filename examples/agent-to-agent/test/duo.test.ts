@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { ROLES } from '../agents';
 import { discoverPeer, hirePeer } from '../hirer';
 import { CARD_PATH, jobMemo } from '../protocol';
-import { startProvider } from '../provider';
+import { startProvider, type Behavior } from '../provider';
 import { SKILLS } from '../skills';
 import type { Agent } from '../types';
 
@@ -16,7 +16,7 @@ interface Payment { id: string; from: string; to: string; tinybar: bigint; ts: n
 class World {
   agents = new Map<string, AgentDetail>();
   payments = new Map<string, Payment>();
-  reviews = new Map<string, { value: number; client: string }[]>();
+  reviews = new Map<string, { value: number; client: string; tag1?: string; tag2: string }[]>();
   clock = Math.floor(Date.now() / 1000);
 
   add(agentId: string, owner: string, url: string): void {
@@ -62,7 +62,7 @@ class World {
       },
       review: async (id, input) => {
         const list = world.reviews.get(String(id)) ?? [];
-        list.push({ value: input.value, client: owner });
+        list.push({ value: input.value, client: owner, tag2: input.tag2, ...(input.tag1 ? { tag1: input.tag1 } : {}) });
         world.reviews.set(String(id), list);
         const peer = world.agents.get(String(id))!;
         const average = list.reduce((sum, r) => sum + r.value, 0) / list.length;
@@ -95,7 +95,7 @@ async function provider(world: World, agent: Agent, faulty: number[] = [], port 
 }
 
 /** B (Hash Notary) serves; A hires it. The card URL must equal B's registered endpoint, so B is restarted on its port. */
-async function setup(faulty: number[] = []) {
+async function setup(faulty: number[] = [], behavior?: (served: number) => Behavior) {
   const world = new World();
   const first = await provider(world, world.agent('2', '0xbb', '0.0.2'));
   const port = Number(new URL(first.url).port);
@@ -105,7 +105,7 @@ async function setup(faulty: number[] = []) {
   world.add('1', '0xaa', 'http://localhost:1');
   world.add('2', '0xbb', url);
   const b = world.agent('2', '0xbb', 'acct:2');
-  const server = await startProvider({ agent: b, role: ROLES.b, url, port, faultyJobs: new Set(faulty), log: () => {} });
+  const server = await startProvider({ agent: b, role: ROLES.b, url, port, faultyJobs: new Set(faulty), ...(behavior ? { behavior } : {}), log: () => {} });
   servers.push(server);
   const a = world.agent('1', '0xaa', 'acct:1');
   return { world, a, b, url };
@@ -121,6 +121,21 @@ describe('two agents', () => {
     expect(world.agents.get('2')!.score.value).toBe(57.5);
     expect(world.payments.size).toBe(2);
     expect(lines.some((l) => l.includes('not hiring'))).toBe(true);
+  });
+
+  it('a provider that keeps the payment and delivers nothing is reported for failed settlement', async () => {
+    const { world, a, url } = await setup([], () => 'ghost');
+    const outcomes = await hirePeer({ agent: a, peerRole: ROLES.b, peerUrl: url, rounds: 1, minScore: 60, log: () => {} });
+    expect(outcomes).toMatchObject([{ kind: 'rated', value: 0 }]);
+    expect(world.payments.size).toBe(1);
+    expect(world.reviews.get('2')).toMatchObject([{ value: 0, tag1: 'misconduct', tag2: 'failed-settlement' }]);
+  });
+
+  it('a correct but slow answer is rated 80', async () => {
+    const { world, a, url } = await setup([], () => 'slow');
+    const outcomes = await hirePeer({ agent: a, peerRole: ROLES.b, peerUrl: url, rounds: 1, minScore: 60, log: () => {} });
+    expect(outcomes).toMatchObject([{ kind: 'rated', value: 80 }]);
+    expect(world.agents.get('2')!.score.value).toBe(80);
   });
 
   it('an honest provider keeps its score', async () => {

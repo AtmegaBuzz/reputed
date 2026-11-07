@@ -5,6 +5,7 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev --filter=@reputed/server --filter=@reputed/web",
+    "simulate": "pnpm --filter @reputed/example-agent-to-agent simulate",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck"
   },

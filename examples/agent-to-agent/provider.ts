@@ -12,6 +12,15 @@ import type { Agent } from './types';
 // account at least the price, after the quote, with the job's ID as its memo, in a transaction it has
 // not accepted before.
 
+/**
+ * How the provider handles one paid job: answer correctly, answer wrongly, answer correctly but
+ * slowly (over the hirer's 2-second bar), or keep the payment and deliver nothing.
+ */
+export type Behavior = 'honest' | 'wrong' | 'slow' | 'ghost';
+
+/** How long a 'slow' job takes: past the 2 seconds the hirer rates 95 for. */
+export const SLOW_WORK_MS = 2_500;
+
 export interface ProviderOptions {
   agent: Agent;
   role: Role;
@@ -19,6 +28,8 @@ export interface ProviderOptions {
   port: number;
   /** Served-job numbers (1-based) that get a deliberately wrong answer. */
   faultyJobs: Set<number>;
+  /** Decides each served job (1-based) instead of faultyJobs. The simulation draws it from a persona. */
+  behavior?: (served: number) => Behavior;
   log: Log;
   /** How long a quote stays payable. */
   quoteTtlMs?: number;
@@ -138,12 +149,21 @@ export function startProvider(options: ProviderOptions): Promise<Server> {
 
     served += 1;
     job.number = served;
-    const faulty = faultyJobs.has(job.number);
+    const act = options.behavior?.(job.number) ?? (faultyJobs.has(job.number) ? 'wrong' : 'honest');
+    const hirer = `${job.hirer.name} #${job.hirer.agentId}`;
+    if (act === 'ghost') {
+      // The payment stays spent: this is the failed settlement the hirer reports as misconduct.
+      job.state = 'done';
+      log(`Job ${job.number} for ${hirer}: took the payment (${reserved}) and delivered NOTHING`);
+      throw new HttpError(503, 'UNAVAILABLE', 'The agent could not do this job.');
+    }
     const started = performance.now();
-    const output = skill.perform(job.input, faulty);
+    if (act === 'slow') await new Promise((resolve) => setTimeout(resolve, SLOW_WORK_MS));
+    const output = skill.perform(job.input, act === 'wrong');
     const workMs = Math.round(performance.now() - started);
     job.state = 'done';
-    log(`Job ${job.number} for #${job.hirer.agentId}: paid (${reserved}), delivered${faulty ? ' a deliberately WRONG answer' : ''}`);
+    const how = act === 'wrong' ? ' a deliberately WRONG answer' : act === 'slow' ? ` a correct answer, slowly (${workMs} ms)` : '';
+    log(`Job ${job.number} for ${hirer}: payment ${reserved} checked on the Mirror Node, delivered${how}`);
     return { jobId, output, workMs };
   }
 

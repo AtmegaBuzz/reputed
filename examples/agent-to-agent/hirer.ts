@@ -93,7 +93,8 @@ function rating(verdict: Verdict | null, delivery: Delivery | null, job: number)
 
 const errorText = (error: unknown) => (error instanceof ReputedAgentError ? `${error.code}: ${error.message}` : (error as Error).message);
 
-async function runJob(options: HireOptions, card: AgentCard, job: number): Promise<JobOutcome> {
+/** One job against a discovered peer: gate, quote, pay, deliver, judge, rate. */
+export async function runJob(options: HireOptions, card: AgentCard, job: number): Promise<JobOutcome> {
   const { agent, peerRole, log, minScore } = options;
   const skill = SKILLS[peerRole.skill];
   const peerId = card.reputed.agentId;
@@ -121,7 +122,7 @@ async function runJob(options: HireOptions, card: AgentCard, job: number): Promi
   }
 
   // 3. Pay
-  log(`Job ${job}: paying ${card.name} #${peerId} ${quote.priceHbar} HBAR`);
+  log(`Job ${job}: ${card.name} #${peerId} quoted ${quote.priceHbar} HBAR for ${skill.id} ${JSON.stringify(input)}; paying it`);
   const payment = await agent.pay(peerId, quote.priceHbar, { memo: jobMemo(quote.jobId) });
 
   // 4. Deliver. A provider that took the money and failed to answer is reported as misconduct.

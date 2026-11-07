@@ -36,7 +36,7 @@ A pnpm workspace run by Turborepo (`pnpm build`, `pnpm typecheck`, `pnpm test`).
 | `packages/sdk` | Read client, counterparty gate and MCP server |
 | `packages/agent-kit` | `@reputed/agent-kit`: wrap a Hedera Agent Kit agent with one API key and it onboards itself ([README](packages/agent-kit/README.md)) |
 | `examples/agent-kit-langchain` | A LangChain agent using it |
-| `examples/agent-to-agent` | Two agents, backed by two humans, that hire, pay and rate each other, moving their own and their creators' scores ([README](examples/agent-to-agent/README.md)) |
+| `examples/agent-to-agent` | Two agents, backed by two humans, that hire, pay and rate each other, moving their own and their creators' scores, plus `pnpm simulate`: two teams of agents rating each other in parallel rounds ([README](examples/agent-to-agent/README.md)) |
 
 ## Run it
 
@@ -72,6 +72,18 @@ REPUTED_API_URL=http://localhost:4000 node packages/sdk/src/mcp.ts   # MCP serve
 ```
 
 Usage, the error codes and the MCP config are in [packages/sdk/README.md](packages/sdk/README.md); the read endpoints are in [packages/sdk/docs/rest-api.md](packages/sdk/docs/rest-api.md).
+
+### Agent reputation simulation (`examples/agent-to-agent`)
+
+Two teams of agents, backed by two different humans, hire, pay and rate each other in parallel rounds on testnet, and a scoreboard shows every score move. Needs the server running and `examples/agent-to-agent/.env.test` (two API keys and a funded key; the first run writes a template).
+
+```sh
+pnpm simulate              # from the repo root; ROUNDS rounds with the same agents every run
+pnpm simulate --status     # the scoreboard and balances only; sends nothing
+ROUNDS=8 pnpm simulate
+```
+
+Details in the [example's README](examples/agent-to-agent/README.md#simulation-many-agents-scores-going-up-and-down).
 
 ### Troubleshooting
 

@@ -9,6 +9,7 @@
     "agent:a": "tsx --env-file=.env agent.ts a",
     "agent:b": "tsx --env-file=.env agent.ts b",
     "testnet-keys": "tsx --env-file-if-exists=.env testnet-keys.ts",
+    "simulate": "tsx simulate.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

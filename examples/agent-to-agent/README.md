@@ -85,6 +85,44 @@ pnpm testnet-keys --new     # replaces them
 
 It also reports each agent account's balance.
 
+## Simulation: many agents, scores going up and down
+
+`pnpm simulate` runs two teams of agents in one terminal, each team backed by a different human (one API key each). Every round, each agent hires one agent of the other team, all at the same time, over the same HTTP protocol with real HBAR payments and on-chain reviews. Each agent has a persona that decides how well it works, so its score, and its human's score, rises and falls from round to round. A scoreboard with each change is printed after every round.
+
+| Persona | Per job | Long-run score |
+| --- | --- | --- |
+| `steady` | 5% wrong, 10% slow | about 90 |
+| `sloppy` | 25% wrong, 35% slow | about 72 |
+| `erratic` | 45% wrong, 10% slow, 10% keeps the payment and delivers nothing | about 51 |
+
+On top of that, each run puts one agent per team in a **slump** (60% wrong, 10% keeps the payment) and another on a **streak** (never wrong), picked at random. Without it, the scores of agents with many reviews barely move, and agents that fall below `MIN_SCORE` mostly stop being hired, so after the first run the humans' scores mostly drift upward. With it, each human's score goes down with the slumping agent and up with the streaking one in every run. `SWINGS=0` turns it off.
+
+Ratings are 95 for a correct answer, 80 for a correct but slow one (over 2 seconds), 20 for a wrong one and 0 (`misconduct/failed-settlement`) when the payment was kept and nothing came back. A hirer refuses an agent below `MIN_SCORE`, but gives it a trial job with probability `PROBATION`, so a fallen agent can earn its way back.
+
+```sh
+pnpm simulate              # funds and onboards the agents on the first run, then ROUNDS rounds
+pnpm simulate --status     # the scoreboard and balances only; sends nothing
+ROUNDS=8 pnpm simulate     # any setting can be overridden from the shell
+```
+
+The same commands work from the repo root.
+
+Everything is in `.env.test` (gitignored; it holds private keys). The first run writes a template if it is missing: fill in `TEAM_A_API_KEY`, `TEAM_B_API_KEY` (from two different creators) and `FUNDER_KEY` (a funded ECDSA testnet account). The run then generates a key per agent and saves it there **before** sending it any HBAR, so every later run drives the same agents and their scores carry over. Do not edit or delete those keys.
+
+Before each run the funder tops up any agent that cannot finish it: about 6.6 HBAR for a new agent (onboarding is about 2.1), plus about 0.74 HBAR that Hedera charges the funder for creating the account, and for an existing one up to `1.3 + 0.45 × ROUNDS` plus 1 HBAR when it is below that. A run never sends more than `FUND_LIMIT_HBAR`. Agents A1 to A5 serve on ports 4201 to 4205 and B1 to B5 on 4211 to 4215. The port and the name are part of each agent's registration, so do not change them.
+
+| Variable | Default | |
+| --- | --- | --- |
+| `AGENTS_PER_TEAM` | 3 | 1 to 5 |
+| `ROUNDS` | 4 | Each round every agent hires once and is hired once |
+| `MIN_SCORE` | 60 | Below this a hirer refuses, except for trial jobs |
+| `PROBATION` | 0.5 | The chance of a trial job for an agent below `MIN_SCORE` |
+| `SWINGS` | 1 | One slumping and one streaking agent per team each run; `0` turns it off |
+| `FUND_LIMIT_HBAR` | 50 | The most one run sends from the funder |
+| `A1_PERSONA` … `B5_PERSONA` | see `sim/team.ts` | `steady`, `sloppy` or `erratic`, to change how an agent behaves from now on |
+
+The code is [`simulate.ts`](simulate.ts) with [`sim/`](sim): `team.ts` (agents, personas, who hires whom), `funding.ts`, `env.ts` and `board.ts` (the scoreboard). Jobs go through the same [`hirer.ts`](hirer.ts) and [`provider.ts`](provider.ts) as the two-agent demo.
+
 ## Settings
 
 | Variable | Default | |
@@ -106,5 +144,6 @@ It also reports each agent account's balance.
 | [`protocol.ts`](protocol.ts) | The HTTP messages: a minimal protocol that borrows the A2A agent card and the x402 pay-then-retry pattern. It is not an implementation of either spec |
 | [`demo.ts`](demo.ts) | Runs both agents and prints the final scores |
 | [`testnet-keys.ts`](testnet-keys.ts) | Testnet only: API keys from two creators' wallet keys |
+| [`simulate.ts`](simulate.ts), [`sim/`](sim) | The many-agent reputation simulation |
 
 `pnpm test` runs both sides against each other over HTTP with an in-memory stand-in for Hedera and Reputed. It covers the faulty agent losing the business, a payment cited for a different job than the one it names, a payment made before the quote, someone else's payment, an unbacked hirer, and a card whose endpoint was never registered.

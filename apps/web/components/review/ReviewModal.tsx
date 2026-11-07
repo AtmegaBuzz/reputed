@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useReadContract, useSignMessage, useWriteContract } from 'wagmi';
+import { useReadContract, useSignMessage } from 'wagmi';
 import type { Hash } from 'viem';
 import {
   HEDERA_TESTNET,
@@ -18,6 +18,7 @@ import {
 import { CREATOR_REGISTRY, GAS } from '@/lib/contracts';
 import { useDebounced } from '@/lib/useDebounced';
 import { NotSentError } from '@/lib/walletError';
+import { useWalletSend } from '@/lib/walletSend';
 import { CostHint } from '../CostHint';
 import { InlineError } from '../InlineError';
 import { TransactionButton, type TxPhase } from '../TransactionButton';
@@ -142,7 +143,7 @@ function ReviewForm({ agent, client, onBusyChange, onHoldChange, onConfirmed, on
   );
 
   const { signMessageAsync } = useSignMessage();
-  const { writeContractAsync } = useWriteContract();
+  const { writeContract: writeContractAsync } = useWalletSend();
 
   const settledPaste = useDebounced(pasted);
   const payment = usePaymentCheck(agent, client, pasted.trim() ? pasted : selected, pasted !== settledPaste);
@@ -213,13 +214,11 @@ function ReviewForm({ agent, client, onBusyChange, onHoldChange, onConfirmed, on
       setStep('sign-tx');
       // The file names this wallet, so the transaction must come from it even if the wallet has moved on.
       return await writeContractAsync({
-        account: client,
         address: REPUTATION_REGISTRY,
         abi: reputationRegistryAbi,
         functionName: 'giveFeedback',
         args: [BigInt(agent.agentId), BigInt(value), 0, tag1, tag2, draft.endpoint, upload.feedbackUri, upload.feedbackHash],
         gas: GAS.giveFeedback,
-        chainId: HEDERA_TESTNET.id,
       });
     } finally {
       setStep(null);

@@ -2,11 +2,12 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useReadContract, useWriteContract } from 'wagmi';
+import { useReadContract } from 'wagmi';
 import { HEDERA_TESTNET, creatorRegistryAbi, type AgentSummary } from '@reputed/shared';
 import { chainClient } from '@/lib/chainClient';
 import { CREATOR_REGISTRY, GAS } from '@/lib/contracts';
 import { CostHint } from '../CostHint';
+import { useWalletSend } from '@/lib/walletSend';
 import { TransactionButton, type TxPhase } from '../TransactionButton';
 import { Dialog, DialogDone } from '../review/Dialog';
 
@@ -19,7 +20,7 @@ const STOP_AFTER_MS = 60_000;
  */
 export function ReportCompromised({ agent }: { agent: AgentSummary }) {
   const queryClient = useQueryClient();
-  const { writeContractAsync } = useWriteContract();
+  const { writeContract: writeContractAsync } = useWalletSend();
   const [open, setOpen] = useState(false);
   const [phase, setPhase] = useState<TxPhase>('idle');
   const cancel = useRef<HTMLButtonElement>(null);
@@ -104,7 +105,6 @@ export function ReportCompromised({ agent }: { agent: AgentSummary }) {
                 functionName: 'reportCompromise',
                 args: [agentId],
                 gas: GAS.reportCompromise,
-                chainId: HEDERA_TESTNET.id,
               })
             }
             onPhase={setPhase}

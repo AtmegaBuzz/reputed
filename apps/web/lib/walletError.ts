@@ -2,6 +2,8 @@ import {
   BaseError,
   ChainMismatchError,
   InsufficientFundsError,
+  InvalidInputRpcError,
+  InvalidParamsRpcError,
   MethodNotFoundRpcError,
   MethodNotSupportedRpcError,
   UnauthorizedProviderError,
@@ -11,7 +13,7 @@ import { ConnectorAccountNotFoundError, ConnectorChainMismatchError } from 'wagm
 
 const TOP_UP = 'Not enough HBAR. Top up from the testnet faucet.';
 const WRONG_CHAIN = 'Your wallet is on another network. Switch it to Hedera Testnet, then retry.';
-const UNSUPPORTED = 'Your wallet refused this request as unsupported, so nothing was sent. Try another wallet, or check the browser console for details.';
+const UNSUPPORTED = 'Your wallet refused this request as unsupported, so nothing was sent. Check the browser console for details.';
 // A wallet that does not implement the send method refuses it before signing anything.
 const UNSUPPORTED_TEXT = /unsupported method|method not (found|supported)/i;
 const ACCOUNT_GONE = 'Your wallet no longer shares this account with this site. Switch back to it, then try again.';
@@ -57,6 +59,11 @@ export function describeWalletError(err: unknown): WalletErrorText {
     if (err.walk((e) => e instanceof ChainMismatchError)) return { rejected: false, message: WRONG_CHAIN, notSent: true };
     if (err.walk((e) => e instanceof MethodNotSupportedRpcError || e instanceof MethodNotFoundRpcError) || UNSUPPORTED_TEXT.test(err.message)) {
       return { rejected: false, message: UNSUPPORTED, notSent: true };
+    }
+    // The wallet turned the request down before signing it, so nothing was sent. Its words say why.
+    const refused = err.walk((e) => e instanceof InvalidParamsRpcError || e instanceof InvalidInputRpcError);
+    if (refused instanceof BaseError) {
+      return { rejected: false, message: `Your wallet refused this transaction, so nothing was sent: ${refused.details || refused.shortMessage}`, notSent: true };
     }
     // Anything else may have come back after the relay accepted the send, so the outcome is open.
     return { rejected: false, message: err.shortMessage, notSent: false };

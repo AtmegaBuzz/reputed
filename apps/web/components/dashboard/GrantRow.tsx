@@ -3,13 +3,13 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useQueryClient } from '@tanstack/react-query';
-import { useWriteContract } from 'wagmi';
 import type { Address } from 'viem';
-import { HEDERA_TESTNET, creatorRegistryAbi, type GrantSummary } from '@reputed/shared';
+import { creatorRegistryAbi, type GrantSummary } from '@reputed/shared';
 import { chainClient } from '@/lib/chainClient';
 import { CREATOR_REGISTRY, GAS } from '@/lib/contracts';
 import { getGrantLabel } from '@/lib/grantLabels';
 import { ReportCompromised } from '../creator/ReportCompromised';
+import { useWalletSend } from '@/lib/walletSend';
 import { TransactionButton } from '../TransactionButton';
 
 export type GrantState = 'active' | 'revoked' | 'expired' | 'full';
@@ -30,7 +30,7 @@ const STATE_TEXT: Record<GrantState, string> = {
 
 export function GrantRow({ grant, creator, canSign }: { grant: GrantSummary; creator: Address; canSign: boolean }) {
   const queryClient = useQueryClient();
-  const { writeContractAsync } = useWriteContract();
+  const { writeContract: writeContractAsync } = useWalletSend();
   const [label, setLabel] = useState<string | undefined>();
   // Read in an effect: the label is in this browser's storage, which the server render cannot see.
   useEffect(() => setLabel(getGrantLabel(grant.grantKey)), [grant.grantKey]);
@@ -83,8 +83,6 @@ export function GrantRow({ grant, creator, canSign }: { grant: GrantSummary; cre
                 functionName: 'revokeGrant',
                 args: [grant.grantKey],
                 gas: GAS.revokeGrant,
-                account: creator,
-                chainId: HEDERA_TESTNET.id,
               })
             }
             onConfirmed={refresh}

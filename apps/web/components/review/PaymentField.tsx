@@ -1,15 +1,15 @@
 'use client';
 
 import { useId, useRef, useState } from 'react';
-import { useSendTransaction } from 'wagmi';
 import { formatEther, parseEther } from 'viem';
-import { HEDERA_TESTNET, hashscan, type AgentDetail, type Address } from '@reputed/shared';
+import { hashscan, type AgentDetail, type Address } from '@reputed/shared';
 import { formatDateTime } from '@/lib/format';
 import { AddressChip } from '../AddressChip';
 import { CostHint } from '../CostHint';
 import { EmptyState } from '../EmptyState';
 import { CheckIcon } from '../icons';
 import { InlineError } from '../InlineError';
+import { useWalletSend } from '@/lib/walletSend';
 import { TransactionButton, type TxPhase } from '../TransactionButton';
 import { clearPaymentAttempt, loadPaymentAttempt, savePaymentAttempt, type PaymentAttempt } from './attempts';
 import { MirrorUnavailableError, consensusToMs, findSentPayment, toSdkTransactionId, type PaymentParties, type VerifiedPayment } from './mirror';
@@ -59,7 +59,7 @@ function SendPayment({ agent, client, wallet, parties, usedIds, expanded, onSend
     return price === undefined ? '' : hbarText(price);
   });
   const [phase, setPhase] = useState<TxPhase>('idle');
-  const { sendTransactionAsync } = useSendTransaction();
+  const { send: sendTransactionAsync } = useWalletSend();
   const value = toWeibars(amount);
   const entered = amount.trim() !== '';
   // The amount is fixed once a send is in flight, and free again if a clean search found nothing.
@@ -73,7 +73,7 @@ function SendPayment({ agent, client, wallet, parties, usedIds, expanded, onSend
   function send() {
     attempt.current = { startedAt: Date.now(), weibars: value!.toString() };
     savePaymentAttempt(client, agent.agentId, attempt.current);
-    return sendTransactionAsync({ account: client, to: wallet, value: value!, gas: PAYMENT_GAS, chainId: HEDERA_TESTNET.id });
+    return sendTransactionAsync({ to: wallet, value: value!, gas: PAYMENT_GAS });
   }
 
   /** Throws until both accounts are known, because that says nothing about the payment. */

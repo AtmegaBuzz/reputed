@@ -2,13 +2,13 @@
 
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useWriteContract } from 'wagmi';
 import { zeroAddress, type Address } from 'viem';
-import { HEDERA_TESTNET, creatorRegistryAbi, grantAddress, newApiKey } from '@reputed/shared';
+import { creatorRegistryAbi, grantAddress, newApiKey } from '@reputed/shared';
 import { chainClient } from '@/lib/chainClient';
 import { CREATOR_REGISTRY, GAS } from '@/lib/contracts';
 import { saveGrantLabel } from '@/lib/grantLabels';
 import { CostHint } from '../CostHint';
+import { useWalletSend } from '@/lib/walletSend';
 import { TransactionButton } from '../TransactionButton';
 
 const DAY_SECONDS = 86_400;
@@ -27,7 +27,7 @@ interface Draft {
  */
 export function NewKey({ creator }: { creator: Address }) {
   const queryClient = useQueryClient();
-  const { writeContractAsync } = useWriteContract();
+  const { writeContract: writeContractAsync } = useWalletSend();
   const [label, setLabel] = useState('');
   const [days, setDays] = useState(90);
   const [maxAgents, setMaxAgents] = useState(10);
@@ -128,8 +128,6 @@ export function NewKey({ creator }: { creator: Address }) {
                 functionName: 'authorizeGrant',
                 args: [draft.grant, BigInt(Math.floor(Date.now() / 1000) + draft.days * DAY_SECONDS), draft.maxAgents],
                 gas: GAS.authorizeGrant,
-                account: creator,
-                chainId: HEDERA_TESTNET.id,
               })
             }
             onConfirmed={() => {

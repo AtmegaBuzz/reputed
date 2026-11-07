@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useIdentity } from '@/lib/useIdentity';
 import { Logo } from './icons';
+import { LivePill } from './LivePill';
 import { NetworkPill } from './NetworkPill';
 import { WalletButton } from './WalletButton';
 
@@ -43,6 +44,7 @@ export function Nav() {
         })}
       </nav>
       <div className="navbar-right">
+        <LivePill />
         <NetworkPill />
         <WalletButton />
       </div>

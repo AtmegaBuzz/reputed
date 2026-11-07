@@ -158,12 +158,8 @@ h1 { font-size: 2.1rem; line-height: 1.1; letter-spacing: -0.02em; font-weight: 
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
 .card h3 { margin: 0; font-size: 1.05rem; letter-spacing: -0.01em; }
 .is-revoked, .is-excluded { opacity: 0.65; }
-.credential-head, .review-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.credential-meta { display: flex; gap: 24px; margin: 0; }
-.credential-meta dt { font-size: 0.75rem; color: var(--muted); }
-.credential-meta dd { margin: 0; font-weight: 600; }
-.credential-foot, .review-foot { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; font-size: 0.85rem; }
-.credential-foot { justify-content: space-between; }
+.review-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.review-foot { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; font-size: 0.85rem; }
 
 .review-who { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .review-value { display: flex; align-items: center; gap: 10px; }
@@ -268,8 +264,7 @@ details summary { cursor: pointer; }
 
 /* ---- Narrow screens (checked by reading at 390px; see docs/05-work-split.md T6.11) ---- */
 /* Long names, comments and issuers must wrap instead of pushing the page wider. */
-.agent-hero-text h1, .agent-desc, .review-comment, .review-response p, .credential-meta dd { overflow-wrap: anywhere; }
-.credential-meta { flex-wrap: wrap; gap: 8px 24px; }
+.agent-hero-text h1, .agent-desc, .review-comment, .review-response p { overflow-wrap: anywhere; }
 
 @media (max-width: 640px) {
   /* The wallet button can wrap onto its own line at the left, so a right-anchored menu would run off-screen.
@@ -640,4 +635,89 @@ details summary { cursor: pointer; }
 }
 @media (prefers-reduced-motion: reduce) {
   .site-glow::after, .click-ring { animation: none; }
+}
+
+/* Live updates: the pill in the nav, and scores that flash when the server reports a change */
+.live-pill { display: inline-flex; align-items: center; gap: 6px; }
+.live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex: none; }
+.live-pill.is-live .live-dot, .chip-live .live-dot { background: var(--verified); box-shadow: 0 0 0 0 rgb(169 230 217 / 0.6); animation: live-beat 2s ease-out infinite; }
+.live-pill.is-polling .live-dot { background: var(--warn-border); }
+.live-pill.just-changed { color: var(--verified); border-color: rgb(169 230 217 / 0.45); }
+@keyframes live-beat {
+  0% { box-shadow: 0 0 0 0 rgb(169 230 217 / 0.6); }
+  70%, 100% { box-shadow: 0 0 0 6px rgb(169 230 217 / 0); }
+}
+.ring-value { transition: stroke-dashoffset 900ms cubic-bezier(0.2, 0.7, 0.2, 1), stroke 400ms; }
+.score-ring.is-up { --flash: var(--verified); }
+.score-ring.is-down { --flash: var(--error); }
+.score-ring.is-up, .score-ring.is-down { animation: ring-flash 1.3s ease-out; border-radius: 50%; }
+@keyframes ring-flash {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--flash) 70%, transparent); }
+  100% { box-shadow: 0 0 0 14px transparent; }
+}
+.score-delta {
+  position: absolute; top: -6px; right: -10px; padding: 1px 6px; border-radius: 999px; white-space: nowrap;
+  font-size: 0.72rem; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--navy); background: var(--flash);
+  animation: delta-float 2.6s ease-out forwards; pointer-events: none;
+}
+.score-ring-lg .score-delta { font-size: 0.9rem; top: 0; right: -14px; }
+@keyframes delta-float {
+  0% { opacity: 0; transform: translateY(6px); }
+  12%, 70% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-8px); }
+}
+.live-number { border-radius: 6px; font-variant-numeric: tabular-nums; }
+.live-number.is-up { animation: number-up 2.6s ease-out; }
+.live-number.is-down { animation: number-down 2.6s ease-out; }
+@keyframes number-up { 0%, 40% { color: var(--verified); background: var(--verified-bg); } 100% { background: transparent; } }
+@keyframes number-down { 0%, 40% { color: var(--error); background: var(--error-bg); } 100% { background: transparent; } }
+
+/* Interaction graph on the agent page */
+.graph-card { gap: 6px; }
+.graph-card .section-head { margin-bottom: 4px; }
+.graph-wrap { width: 100%; min-width: 0; }
+.graph { display: block; max-width: 100%; overflow: visible; }
+.graph-skeleton { width: 100%; border-radius: 14px; }
+.graph-empty { padding: 28px 0; text-align: center; }
+.chip-live { display: inline-flex; align-items: center; gap: 6px; background: var(--verified-bg); color: var(--verified); }
+.edge { fill: none; stroke-linecap: round; opacity: 0.8; transition: opacity 200ms; }
+.edge.q-good, .edge-head.q-good { stroke: var(--verified); fill: var(--verified); }
+.edge.q-mixed, .edge-head.q-mixed { stroke: var(--warn-text); fill: var(--warn-text); }
+.edge.q-poor, .edge-head.q-poor { stroke: var(--error); fill: var(--error); }
+.edge.q-good, .edge.q-mixed, .edge.q-poor { fill: none; }
+.edge.is-active { stroke-dasharray: 7 6; animation: edge-flow 0.9s linear infinite; opacity: 1; }
+@keyframes edge-flow { to { stroke-dashoffset: -13; } }
+.edges.is-dim, .node.is-dim { opacity: 0.25; }
+.node { transition: opacity 200ms; outline: none; }
+.node .node-body { fill: var(--surface-solid); stroke: var(--tier, var(--muted)); stroke-width: 3; transition: stroke-width 150ms; }
+.node.tier-none { --tier: var(--muted); }
+.node.tier-none .node-body { stroke-dasharray: 4 3; }
+.node-center .node-body { fill: color-mix(in srgb, var(--tier) 16%, var(--surface-solid)); stroke-width: 4; }
+.node.is-link { cursor: pointer; }
+.node.is-link:hover .node-body, .node:focus-visible .node-body { stroke-width: 5; }
+.node:focus-visible .node-body { stroke: var(--cream); }
+.node-score { fill: var(--tier, var(--text)); text-anchor: middle; font-family: var(--font-display); font-weight: 700; font-size: 14px; font-variant-numeric: tabular-nums; }
+.node-center .node-score { font-size: 22px; }
+.node-label { fill: var(--text); text-anchor: middle; font-size: 12px; font-weight: 600; }
+.node-sub { fill: var(--muted); text-anchor: middle; font-size: 11px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.node-halo { fill: none; stroke: var(--verified); stroke-width: 2; opacity: 0.6; animation: halo 1.8s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes halo { 0% { transform: scale(0.92); opacity: 0.75; } 100% { transform: scale(1.25); opacity: 0; } }
+.graph-info { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; min-height: 2.6em; font-size: 0.9rem; }
+.graph-legend { list-style: none; margin: 4px 0 0; padding: 10px 0 0; border-top: 1px solid var(--border); display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 0.8rem; color: var(--muted); }
+.graph-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.legend-line { width: 18px; height: 3px; border-radius: 2px; }
+.legend-line.q-good { background: var(--verified); }
+.legend-line.q-mixed { background: var(--warn-text); }
+.legend-line.q-poor { background: var(--error); }
+.legend-pulse { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--verified); animation: live-beat 2s ease-out infinite; }
+
+/* Minted NFTs, laid out like reviews */
+.nft-serial { font-family: var(--font-display); font-size: 1.4rem; min-width: auto; }
+.nft-title { display: flex; flex-direction: column; line-height: 1.25; }
+.nft-card .chips .chip { display: inline-flex; align-items: center; gap: 4px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .live-dot, .legend-pulse, .node-halo, .edge.is-active, .score-ring.is-up, .score-ring.is-down, .live-number.is-up, .live-number.is-down { animation: none; }
+  .score-delta { animation: none; opacity: 1; }
+  .ring-value { transition: none; }
 }

@@ -3,6 +3,7 @@ import {
   hashscan,
   type Address,
   type AgentDetail,
+  type AgentInteractions,
   type AgentListResponse,
   type AgentStatus,
   type AgentSummary,
@@ -31,6 +32,7 @@ import {
   limiter,
   type RateLimits,
 } from '../routes/rateLimits.ts';
+import { interactionsOf } from './interactions.ts';
 import { nextHalvingAt } from './misconduct.ts';
 import { toIso } from './time.ts';
 import { hashscanTxId } from './txid.ts';
@@ -187,6 +189,8 @@ function credentialsOf(runtime: ScorerRuntime, view: LiveView, agentId: string):
       issuedAt: toIso(credential.issuedAt),
       revoked: credential.revokedAt !== null,
       issuer,
+      // A consensus timestamp opens the minting transaction on HashScan.
+      txId: credential.issuedAt,
     }));
 }
 
@@ -195,10 +199,12 @@ function agentDetail(runtime: ScorerRuntime, view: LiveView, result: AgentResult
   const profile = profileOf(runtime, view, agentId);
   const compromisedAt = view.state.compromisedAt.get(agentId);
   const published = runtime.store.latestPublishedSnapshot();
+  const registeredAt = view.state.identities.get(agentId)?.registeredAt;
   return {
     ...toSummary(runtime, view, result, profile),
     endpoints: profile.endpoints,
     agentUri: view.state.identities.get(agentId)?.agentUri ?? '',
+    ...(registeredAt ? { registrationTxId: registeredAt } : {}),
     operatorChanged: operatorChanged(view, agentId),
     ...(compromisedAt ? { compromisedAt: toIso(compromisedAt) } : {}),
     credentials: credentialsOf(runtime, view, agentId),
@@ -366,6 +372,24 @@ export function registerReadRoutes(
       const result = view?.result.agents.find((agent) => agent.agentId === id);
       if (!view || !result) throw notFound('Agent');
       return agentDetail(runtime, view, result);
+    },
+  );
+
+  /** Agents this agent reviewed or was reviewed by: the graph on the agent page. */
+  app.get<{ Params: { agentId: string } }>(
+    '/api/agents/:agentId/interactions',
+    async (req): Promise<AgentInteractions> => {
+      await agentLimit(req);
+      const { agentId } = req.params;
+      if (!/^\d{1,78}$/.test(agentId)) throw notFound('Agent');
+      const id = BigInt(agentId).toString();
+      const view = runtime.view();
+      // Only agents already in the view: this route never starts a Mirror Node lookup.
+      if (!view || !view.result.agents.some((agent) => agent.agentId === id)) throw notFound('Agent');
+      return interactionsOf(view, id, (peerId) => {
+        const result = view.result.agents.find((agent) => agent.agentId === peerId);
+        return result ? toSummary(runtime, view, result, profileOf(runtime, view, peerId)) : null;
+      });
     },
   );
 

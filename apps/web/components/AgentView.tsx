@@ -8,10 +8,12 @@ import { formatDate, formatDateTime } from '@/lib/format';
 import { fileHref } from '@/lib/uri';
 import { useAgent } from '@/lib/useAgent';
 import { AddressChip } from './AddressChip';
-import { CredentialCard } from './CredentialCard';
 import { EmptyState } from './EmptyState';
 import { HumanBackedBadge } from './HumanBackedBadge';
 import { InlineError } from './InlineError';
+import { InteractionGraph } from './InteractionGraph';
+import { LiveNumber } from './LiveNumber';
+import { MintedNfts } from './MintedNfts';
 import { ReviewList } from './ReviewList';
 import { ReviewSlot } from './ReviewSlot';
 import { ScoreRing } from './ScoreRing';
@@ -70,7 +72,7 @@ function CreatorCard({ agent }: { agent: AgentDetail }) {
           <div className="row">
             <AddressChip address={agent.creator} />
             <span className="muted">
-              {agent.creatorScore === null ? 'No creator score' : `Creator score ${Math.round(agent.creatorScore)}`}
+              {agent.creatorScore === null ? 'No creator score' : <>Creator score <LiveNumber value={agent.creatorScore} format={(v) => v.toFixed(2)} /></>}
             </span>
           </div>
           <Link href={`/creator/${agent.creator}`}>View creator profile</Link>
@@ -97,19 +99,27 @@ function TrustBreakdown({ agent }: { agent: AgentDetail }) {
     <dl className="profile-stats" aria-label="Trust breakdown">
       <div>
         <dt>Reviews counted</dt>
-        <dd>{agent.reviewsCounted}</dd>
+        <dd>
+          <LiveNumber value={agent.reviewsCounted} />
+        </dd>
       </div>
       <div>
         <dt>Reviews excluded</dt>
-        <dd>{agent.reviewsExcluded}</dd>
+        <dd>
+          <LiveNumber value={agent.reviewsExcluded} />
+        </dd>
       </div>
       <div>
         <dt>Confirmed penalties</dt>
-        <dd>{agent.penaltiesConfirmed}</dd>
+        <dd>
+          <LiveNumber value={agent.penaltiesConfirmed} />
+        </dd>
       </div>
       <div>
         <dt>Creator score</dt>
-        <dd>{agent.creatorScore === null ? '—' : Math.round(agent.creatorScore)}</dd>
+        <dd>
+          <LiveNumber value={agent.creatorScore} format={(v) => v.toFixed(2)} />
+        </dd>
       </div>
       {agent.reviewsExcluded > 0 && (
         <details>
@@ -217,8 +227,10 @@ export function AgentView({ agentId }: { agentId: string }) {
   }
   if (isLoading || !agent) return <AgentSkeleton />;
 
+  // Keyed by agent, so going from one agent to another remounts the page instead of flashing the
+  // difference between two agents' scores as a change.
   return (
-    <article className="agent-page">
+    <article key={agent.agentId} className="agent-page">
       {agent.scoresStale && (
         <div>
           <StaleScoresChip updatedAt={agent.updatedAt} />
@@ -240,6 +252,8 @@ export function AgentView({ agentId }: { agentId: string }) {
         <TrustBreakdown agent={agent} />
       </section>
 
+      <InteractionGraph agent={agent} />
+
       <div className="layout-2col">
         <div className="agent-page">
           <section>
@@ -252,22 +266,11 @@ export function AgentView({ agentId }: { agentId: string }) {
             </div>
             <ReviewList reviews={agent.reviews} />
           </section>
+          <MintedNfts agent={agent} />
         </div>
 
         <aside className="rail">
           <CreatorCard agent={agent} />
-          <section className="card">
-            <h2>Credentials</h2>
-            {agent.credentials.length === 0 ? (
-              <p className="muted">No credentials yet.</p>
-            ) : (
-              <div className="agent-grid">
-                {agent.credentials.map((c) => (
-                  <CredentialCard key={`${c.tokenId}-${c.serial}`} credential={c} />
-                ))}
-              </div>
-            )}
-          </section>
           <Endpoints agent={agent} />
           <OnChainLinks agent={agent} />
         </aside>

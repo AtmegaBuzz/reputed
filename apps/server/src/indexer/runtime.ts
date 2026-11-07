@@ -60,6 +60,8 @@ export class ScorerRuntime {
   private readonly clock: () => number;
   private readonly maxTrackedAgents: number;
   private live: LiveView | null = null;
+  /** Told about every new live view, so /api/events can push changes instead of clients polling. */
+  private readonly liveListeners = new Set<(view: LiveView) => void>();
   /** Reviews whose last lookup failed: held out of both views until a sync resolves them. */
   private unresolved: Set<string> = new Set();
   /** Lookups under way, so visitors to one agent share one set of Mirror reads. */
@@ -175,6 +177,19 @@ export class ScorerRuntime {
     const newest = current && compareConsensus(current, asOf) > 0 ? current : asOf;
     this.store.setMeta(LIVE_AS_OF, newest);
     this.live = this.buildLive(newest);
+    for (const listener of this.liveListeners) {
+      try {
+        listener(this.live);
+      } catch {
+        // A listener's failure must not stop the sync that refreshed the view.
+      }
+    }
+  }
+
+  /** Calls `listener` with each new live view. Returns the function that stops it. */
+  onLiveView(listener: (view: LiveView) => void): () => void {
+    this.liveListeners.add(listener);
+    return () => this.liveListeners.delete(listener);
   }
 
   private buildLive(asOf: ConsensusTimestamp): LiveView {

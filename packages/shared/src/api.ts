@@ -67,6 +67,8 @@ export interface Credential {
   revoked: boolean;
   /** CreatorRegistry, which issues every credential. */
   issuer: Address;
+  /** The transaction that minted it, for hashscan.tx() (a consensus timestamp). */
+  txId?: string;
 }
 
 export type ExclusionReason =
@@ -107,6 +109,8 @@ export interface Review {
 export interface AgentDetail extends AgentSummary {
   endpoints: AgentEndpoints;
   agentUri: string;
+  /** The transaction that registered the agent and minted its ERC-8004 NFT, for hashscan.tx(). */
+  registrationTxId?: string;
   operatorChanged: boolean;
   compromisedAt?: string;
   credentials: Credential[];
@@ -304,4 +308,48 @@ export interface ReviewFileRequest extends ReviewFile {
 export interface ReviewFileResponse {
   feedbackUri: string;
   feedbackHash: `0x${string}`;
+}
+
+/** The reviews that went one way between an agent and one peer. */
+export interface InteractionStats {
+  reviews: number;
+  counted: number;
+  /** Average review value, 0-100. Null when there are none. */
+  average: number | null;
+  lastValue: number | null;
+  /** ISO 8601. */
+  lastAt: string | null;
+}
+
+/** Someone an agent reviewed or was reviewed by. Each review stands for a paid job between them. */
+export interface InteractionPeer {
+  /** The account that sent the reviews, or the reviewed agent's owner. */
+  address: Address;
+  /** The peer agent, when the address owns exactly one agent. */
+  agent: AgentSummary | null;
+  /** How many agents this address owns. Above one, the reviews cannot be pinned to one of them. */
+  agentCount: number;
+  /** Reviews this agent gave the peer. */
+  given: InteractionStats;
+  /** Reviews the peer gave this agent. */
+  received: InteractionStats;
+  /** ISO 8601, the latest review either way. */
+  lastAt: string;
+}
+
+/** GET /api/agents/:agentId/interactions. Peers newest first. */
+export interface AgentInteractions {
+  agentId: string;
+  peers: InteractionPeer[];
+  updatedAt: string;
+}
+
+/** GET /api/events (Server-Sent Events), `event: scores`: the live view changed. */
+export interface ScoresEvent {
+  /** Changes whenever a score, a review count or the set of reviews changes. */
+  version: string;
+  /** ISO 8601 consensus time of the view. */
+  asOf: string;
+  /** Agents whose score, counted reviews or penalties changed since the previous event. */
+  changed: string[];
 }

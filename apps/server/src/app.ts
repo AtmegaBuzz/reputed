@@ -7,6 +7,7 @@ import type { ReviewBudget, WorldConfig } from './config.ts';
 import { registerErrorHandling } from './errors.ts';
 import type { ReviewPublisher } from './hedera.ts';
 import { registerAgentFileRoute } from './routes/agentFile.ts';
+import { registerEventRoutes } from './routes/events.ts';
 import { DEFAULT_RATE_LIMITS, type RateLimits } from './routes/rateLimits.ts';
 import { registerReviewFileRoute } from './routes/reviewFile.ts';
 import { registerRpSignatureRoute } from './routes/rpSignature.ts';
@@ -74,7 +75,9 @@ export async function buildApp(deps: AppDeps, options: AppOptions = {}): Promise
   });
 
   if (options.readRoutes !== false) {
-    registerReadRoutes(app, options.scorer ?? getScorerRuntime(), rateLimits);
+    const scorer = options.scorer ?? getScorerRuntime();
+    registerReadRoutes(app, scorer, rateLimits);
+    registerEventRoutes(app, scorer, rateLimits);
   }
   return app;
 }

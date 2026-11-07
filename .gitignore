@@ -15,3 +15,6 @@ coverage/
 *.tsbuildinfo
 .DS_Store
 .turbo/
+
+# Agent kit onboarding progress (IDs only, per machine)
+.reputed/

@@ -3,17 +3,21 @@ import type { Plugin } from '@hashgraph/hedera-agent-kit';
 import { InvalidApiKeyError, parseApiKey, type AgentDetail, type ApiError, type ConfigResponse } from '@reputed/shared';
 import { ReputedClient, type VerifyOptions, type VerifyResult } from '@reputed/sdk';
 import type { Address } from 'viem';
+import type { AgentContext } from './context';
 import { ReputedAgentError } from './errors';
 import { clientGateway } from './gateway';
 import { MirrorClient } from './mirror';
 import { onboard, type AgentProfile, type OnboardResult } from './onboard';
+import { pay, verifyPayment, type PaymentCheck, type PaymentReceipt, type PayOptions, type VerifyPaymentOptions } from './payments';
 import { createReputedPlugin } from './plugin';
+import { review, waitForReview, type ReviewInput, type ReviewOutcome, type ReviewReceipt, type WaitForReviewOptions } from './review';
 import { FileStateStore, MemoryStateStore, type StateStore } from './state';
 
 // The public entry point. `connect` validates the inputs that need no network, fetches the deployment
 // from /api/config (contract addresses and the Mirror Node URL are not baked into the package), runs
-// onboarding, and returns an object that holds only the agent ID and a read client. The API key is
-// used inside onboarding to sign and is not kept.
+// onboarding, and returns an object that holds the agent ID, a read client, and what paying and
+// reviewing need (the Client's gateway and a Mirror Node client). The API key is used inside
+// onboarding to sign and is not kept.
 
 export interface ReputedConnectOptions {
   /** The agent's Hedera client. Its operator account becomes the agent's on-chain identity. */
@@ -58,11 +62,15 @@ export class Reputed {
   /** Add this to the Hedera Agent Kit's `configuration.plugins`. */
   readonly plugin: Plugin;
 
+  readonly #actions: AgentContext;
+
   private constructor(
     readonly client: ReputedClient,
     readonly onboarding: OnboardResult,
+    actions: Omit<AgentContext, 'agentId' | 'owner' | 'creator' | 'api'>,
   ) {
     this.plugin = createReputedPlugin(this);
+    this.#actions = { ...actions, agentId: onboarding.agentId, owner: onboarding.owner, creator: onboarding.creator, api: client };
   }
 
   get agentId(): string {
@@ -103,9 +111,13 @@ export class Reputed {
           ? options.state
           : new FileStateStore(options.state ?? DEFAULT_STATE_FILE);
 
+    const gateway = clientGateway(options.client);
+    const mirror = new MirrorClient({ baseUrl: config.mirrorNode, fetch: fetchImpl });
+    const now = () => Date.now();
+    const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
     const result = await onboard({
-      gateway: clientGateway(options.client),
-      mirror: new MirrorClient({ baseUrl: config.mirrorNode, fetch: fetchImpl }),
+      gateway,
+      mirror,
       config,
       apiKey: options.apiKey,
       profile: options.agent,
@@ -117,12 +129,24 @@ export class Reputed {
           headers: { 'content-type': 'application/json', accept: 'application/json' },
           body: JSON.stringify(file),
         }),
-      now: () => Date.now(),
-      sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+      now,
+      sleep,
       log: options.logger ?? (() => {}),
     });
 
-    return new Reputed(new ReputedClient({ apiUrl, fetch: fetchImpl }), result);
+    return new Reputed(new ReputedClient({ apiUrl, fetch: fetchImpl }), result, {
+      gateway,
+      mirror,
+      config,
+      postJson: <T>(path: string, body: unknown) =>
+        apiJson<T>(fetchImpl, `${apiUrl}${path}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', accept: 'application/json' },
+          body: JSON.stringify(body),
+        }),
+      now,
+      sleep,
+    });
   }
 
   /** This agent's current score, tier, credentials and reviews. */
@@ -133,5 +157,38 @@ export class Reputed {
   /** Check another agent before paying or hiring it. */
   verifyCounterparty(agentId: string | number | bigint, options?: VerifyOptions): Promise<VerifyResult> {
     return this.client.verifyCounterparty(agentId, options);
+  }
+
+  /**
+   * Pays another agent in HBAR from this agent's account, to the wallet that agent registered, and
+   * waits until the Mirror Node shows it. The receipt's `transactionId` is the proof a review cites.
+   * It does not vet the agent: call `verifyCounterparty` first.
+   */
+  pay(agentId: string | number | bigint, hbar: number, options?: PayOptions): Promise<PaymentReceipt> {
+    return pay(this.#actions, agentId, hbar, options);
+  }
+
+  /**
+   * Checks that `from` paid this agent's registered wallet in a transaction (with `memo`, if given),
+   * before delivering work for it. Returns
+   * `{ ok: false, reason }` for a payment that does not qualify; throws only if the Mirror Node is down.
+   */
+  verifyPayment(transactionId: string, options: VerifyPaymentOptions): Promise<PaymentCheck> {
+    return verifyPayment(this.#actions, transactionId, options);
+  }
+
+  /**
+   * Reviews another agent: signs the review file with this agent's key, has the server publish it to
+   * HCS, and sends giveFeedback from this agent's account. Refuses, before spending anything, a review
+   * of your own agent, of an agent backed by the same human, or one citing a payment that did not pay
+   * that agent. Each call is a new review, and each payment counts for one.
+   */
+  review(agentId: string | number | bigint, input: ReviewInput): Promise<ReviewReceipt> {
+    return review(this.#actions, agentId, input);
+  }
+
+  /** Waits until the server has scored a review from `review()`, and returns it with the agent's new score. */
+  waitForReview(receipt: Pick<ReviewReceipt, 'agentId' | 'feedbackIndex'>, options?: WaitForReviewOptions): Promise<ReviewOutcome> {
+    return waitForReview(this.#actions, receipt, options);
   }
 }
